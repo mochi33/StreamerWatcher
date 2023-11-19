@@ -19,9 +19,10 @@ func main() {
 
 	e := echo.New()
 	//CORS設定でlocalhost:3000とlocalhost:3001を許可
+
 	e.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
-			c.Response().Header().Set("Access-Control-Allow-Origin", "http://localhost:3001")
+			c.Response().Header().Set("Access-Control-Allow-Origin", "http://localhost:3000")
 			c.Response().Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 			c.Response().Header().Set("Access-Control-Allow-Headers", "Content-Type, Access-Control-Allow-Headers, Authorization, X-Requested-With")
 			c.Response().Header().Set("Access-Control-Allow-Credentials", "true")
@@ -29,63 +30,62 @@ func main() {
 		}
 	})
 
-	e.Static("/", "static")
+	e.Static("/", "static/build")
 
 	e.GET("/api/get_streaming_user", func(c echo.Context) error {
 		fmt.Println("get_streaming_user")
+		query := ""
 		userDataList := []map[string]interface{}{}
-
 		for _, user := range users {
 			userId, err := getTwitchUserID(user, clientId, token)
+			query += "user_id=" + userId + "&"
 			if err != nil {
 				fmt.Println(err)
 				return err
 			}
-			fmt.Println("a")
-			urlStr := "https://api.twitch.tv/helix/streams?user_id=" + userId
-			req, _ := http.NewRequest("GET", urlStr, nil)
-			req.Header.Set("Client-Id", clientId)
-			req.Header.Set("Authorization", "Bearer "+token)
-
-			client := &http.Client{}
-			resp, err := client.Do(req)
-			if err != nil {
-				fmt.Println(err)
-			}
-			defer resp.Body.Close()
-			byteArray, _ := io.ReadAll(resp.Body)
-
-			type TwitchResponse struct {
-				Data []struct {
-					Type        string `json:"type"`
-					ID          string `json:"id"`
-					UserID      string `json:"user_id"`
-					UserLogin   string `json:"user_login"`
-					UserName    string `json:"user_name"`
-					Title       string `json:"title"`
-					ViewerCount int    `json:"viewer_count"`
-				} `json:"data"`
-			}
-
-			var TwitchResponseData TwitchResponse
-			if err := json.Unmarshal(byteArray, &TwitchResponseData); err != nil {
-				fmt.Println(err)
-			}
-
-			if len(TwitchResponseData.Data) > 0 {
-				userData := map[string]interface{}{
-					"userId":      TwitchResponseData.Data[0].UserID,
-					"userLogin":   TwitchResponseData.Data[0].UserLogin,
-					"userName":    TwitchResponseData.Data[0].UserName,
-					"title":       TwitchResponseData.Data[0].Title,
-					"viewerCount": fmt.Sprintf("%d", TwitchResponseData.Data[0].ViewerCount),
-				}
-				userDataList = append(userDataList, userData)
-				fmt.Println("userDataList");
-				fmt.Println(userDataList);
-			}
 		}
-		fmt.Println(userDataList)
+		fmt.Println("a")
+		urlStr := "https://api.twitch.tv/helix/streams?" + query
+		req, _ := http.NewRequest("GET", urlStr, nil)
+		req.Header.Set("Client-Id", clientId)
+		req.Header.Set("Authorization", "Bearer "+token)
+
+		client := &http.Client{}
+		resp, err := client.Do(req)
+		if err != nil {
+			fmt.Println(err)
+		}
+		defer resp.Body.Close()
+		byteArray, _ := io.ReadAll(resp.Body)
+
+		type TwitchResponse struct {
+			Data []struct {
+				Type        string `json:"type"`
+				ID          string `json:"id"`
+				UserID      string `json:"user_id"`
+				UserLogin   string `json:"user_login"`
+				UserName    string `json:"user_name"`
+				Title       string `json:"title"`
+				ViewerCount int    `json:"viewer_count"`
+			} `json:"data"`
+		}
+
+		var TwitchResponseData TwitchResponse
+		if err := json.Unmarshal(byteArray, &TwitchResponseData); err != nil {
+			fmt.Println(err)
+		}
+
+		for i := 0; i < len(TwitchResponseData.Data); i++ {
+			userData := map[string]interface{}{
+				"userId":      TwitchResponseData.Data[i].UserID,
+				"userLogin":   TwitchResponseData.Data[i].UserLogin,
+				"userName":    TwitchResponseData.Data[i].UserName,
+				"title":       TwitchResponseData.Data[i].Title,
+				"viewerCount": fmt.Sprintf("%d", TwitchResponseData.Data[0].ViewerCount),
+			}
+			userDataList = append(userDataList, userData)
+			fmt.Println("userDataList: ", userDataList)
+		}
 
 		return c.JSON(http.StatusOK, map[string][]map[string]interface{}{
 			"users": userDataList,
