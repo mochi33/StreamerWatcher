@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/labstack/echo/v4"
 )
@@ -22,7 +23,7 @@ func main() {
 
 	e.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
-			c.Response().Header().Set("Access-Control-Allow-Origin", "http://localhost:3000")
+			c.Response().Header().Set("Access-Control-Allow-Origin", "*")
 			c.Response().Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 			c.Response().Header().Set("Access-Control-Allow-Headers", "Content-Type, Access-Control-Allow-Headers, Authorization, X-Requested-With")
 			c.Response().Header().Set("Access-Control-Allow-Credentials", "true")
@@ -44,6 +45,7 @@ func main() {
 				return err
 			}
 		}
+		fmt.Println("query: ", query)
 		fmt.Println("a")
 		urlStr := "https://api.twitch.tv/helix/streams?" + query
 		req, _ := http.NewRequest("GET", urlStr, nil)
@@ -57,16 +59,18 @@ func main() {
 		}
 		defer resp.Body.Close()
 		byteArray, _ := io.ReadAll(resp.Body)
+		fmt.Println("byteArray ", string(byteArray))
 
 		type TwitchResponse struct {
 			Data []struct {
-				Type        string `json:"type"`
-				ID          string `json:"id"`
-				UserID      string `json:"user_id"`
-				UserLogin   string `json:"user_login"`
-				UserName    string `json:"user_name"`
-				Title       string `json:"title"`
-				ViewerCount int    `json:"viewer_count"`
+				Type         string `json:"type"`
+				ID           string `json:"id"`
+				UserID       string `json:"user_id"`
+				UserLogin    string `json:"user_login"`
+				UserName     string `json:"user_name"`
+				Title        string `json:"title"`
+				ThumbnailURL string `json:"thumbnail_url"`
+				ViewerCount  int    `json:"viewer_count"`
 			} `json:"data"`
 		}
 
@@ -77,15 +81,19 @@ func main() {
 
 		for i := 0; i < len(TwitchResponseData.Data); i++ {
 			userData := map[string]interface{}{
-				"userId":      TwitchResponseData.Data[i].UserID,
-				"userLogin":   TwitchResponseData.Data[i].UserLogin,
-				"userName":    TwitchResponseData.Data[i].UserName,
-				"title":       TwitchResponseData.Data[i].Title,
+				"userId":    TwitchResponseData.Data[i].UserID,
+				"userLogin": TwitchResponseData.Data[i].UserLogin,
+				"userName":  TwitchResponseData.Data[i].UserName,
+				"title":     TwitchResponseData.Data[i].Title,
+				"thmbnailUrl": strings.Replace(
+					strings.Replace(TwitchResponseData.Data[i].ThumbnailURL, "{width}", "1280", 1),
+					"{height}", "720", 1),
 				"viewerCount": fmt.Sprintf("%d", TwitchResponseData.Data[0].ViewerCount),
 			}
 			userDataList = append(userDataList, userData)
 			fmt.Println("userDataList: ", userDataList)
 		}
+		fmt.Println("userDataList: ", userDataList)
 
 		return c.JSON(http.StatusOK, map[string][]map[string]interface{}{
 			"users": userDataList,
@@ -121,7 +129,7 @@ func getTwitchUserID(loginName string, clientId string, token string) (string, e
 
 	if (usersMap["data"] != nil) && (len(usersMap["data"].([]interface{})) > 0) {
 		userData := usersMap["data"].([]interface{})[0].(map[string]interface{})
-		fmt.Println(userData)
+		fmt.Println("userData: ", userData)
 		return userData["id"].(string), nil
 	}
 	return "", nil
@@ -216,7 +224,7 @@ func getUsersFromJson() ([]string, error) {
 		}
 		usersListStr = append(usersListStr, userStr)
 	}
-	fmt.Println(usersListStr)
+	fmt.Println("usersListStr: ", usersListStr)
 
 	return usersListStr, nil
 }
